@@ -39,7 +39,6 @@ An intelligent image editing platform that combines natural language processing 
 1. **Clone the repository**:
    ```bash
    git clone <repository-url>
-   cd "Final Project"
    ```
 
 2. **Install dependencies**:
@@ -75,12 +74,13 @@ An intelligent image editing platform that combines natural language processing 
 
 ### Editing Images
 1. Open any image from the library
-2. Use preset buttons for common edits:
+2. Navigate to the Image Detail(by ID) page manually to see the selected image. (Important)
+3. Use preset buttons for common edits:
    - Remove background
    - Add tree in background  
    - Make vibrant
-3. Or write custom editing instructions in natural language
-4. View version history and restore previous versions
+4. Or write custom editing instructions in natural language
+5. View version history and restore previous versions
 
 ### Managing Versions
 - Each edit creates a new version while preserving the original
@@ -91,7 +91,7 @@ An intelligent image editing platform that combines natural language processing 
 ## 📁 Project Structure
 
 ```
-Final Project/
+GenEdit-AI-Image-Editor/
 ├── streamlit_app.py      # Main Streamlit application
 ├── storage.py            # Data storage and retrieval functions
 ├── ai_utils.py          # AI model integrations (Gemini, OpenAI)
