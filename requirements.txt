@@ -1,0 +1,8 @@
+streamlit>=1.22
+Pillow
+numpy
+pandas
+sqlite3     # builtin
+requests
+python-dotenv
+tqdm
