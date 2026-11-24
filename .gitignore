@@ -1,0 +1,10 @@
+# Secrets
+.env
+
+# Local image library (keep the folder, not your images)
+data/*
+!data/.gitkeep
+
+__pycache__/
+*.pyc
+.pytest_cache/

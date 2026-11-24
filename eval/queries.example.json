@@ -1,0 +1,5 @@
+[
+  {"query": "dog playing on a beach", "relevant": ["beach-dog"]},
+  {"query": "a red sports car", "relevant": ["red-car"]},
+  {"query": "city skyline at night", "relevant": ["skyline"]}
+]

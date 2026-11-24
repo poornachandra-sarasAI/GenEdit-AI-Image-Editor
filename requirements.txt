@@ -1,8 +1,6 @@
-streamlit>=1.22
-Pillow
-numpy
-pandas
-sqlite3     # builtin
-requests
-python-dotenv
-tqdm
+streamlit>=1.40
+Pillow>=10.0
+numpy>=1.24
+python-dotenv>=1.0
+google-genai>=1.0
+openai>=1.40

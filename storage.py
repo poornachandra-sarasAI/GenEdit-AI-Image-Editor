@@ -9,18 +9,28 @@ DATA_DIR = "data"
 META_FILE = os.path.join(DATA_DIR, "metadata.json")
 
 def ensure_setup():
+    """Create the data folder and a valid metadata file (also repairs an empty one)."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(META_FILE):
-        with open(META_FILE, "w") as f:
-            json.dump({"images": {}}, f, indent=2)
+    needs_init = not os.path.exists(META_FILE) or os.path.getsize(META_FILE) == 0
+    if not needs_init:
+        try:
+            with open(META_FILE, "r") as f:
+                needs_init = "images" not in json.load(f)
+        except json.JSONDecodeError:
+            needs_init = True
+    if needs_init:
+        _save_meta({"images": {}})
 
 def _load_meta():
     with open(META_FILE, "r") as f:
         return json.load(f)
 
 def _save_meta(meta):
-    with open(META_FILE, "w") as f:
+    # Write to a temp file first so a crash mid-write can't corrupt the library
+    tmp = META_FILE + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(meta, f, indent=2)
+    os.replace(tmp, META_FILE)
 
 def new_image_slot(title=None):
     ensure_setup()
@@ -108,11 +118,15 @@ def get_image_meta(image_id):
     return meta["images"][image_id] | {"id": image_id}
 
 def search_by_embedding(query_emb, top_k=10):
+    """Rank images by cosine similarity between the query and caption embeddings."""
+    query_emb = np.asarray(query_emb, dtype=float)
+    if query_emb.size == 0:
+        return []
     meta = _load_meta()
     results = []
     for img_id, data in meta["images"].items():
         emb = np.array(data.get("embedding", []), dtype=float)
-        if emb.size == 0:
+        if emb.size == 0 or emb.shape != query_emb.shape:
             continue
         denom = np.linalg.norm(query_emb) * np.linalg.norm(emb)
         sim = float(np.dot(query_emb, emb) / denom) if denom > 0 else 0.0

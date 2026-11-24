@@ -1,111 +1,122 @@
 # ai_utils.py
+"""Model integrations: Gemini (captioning + image editing) and OpenAI (embeddings)."""
 import os
-import base64
 from io import BytesIO
+
 from dotenv import load_dotenv
-import requests
 from PIL import Image
 
-# ---- Load environment variables ----
 load_dotenv()
-GEN_API_KEY = os.getenv("GEN_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# ---- Initialize Gemini ----
-import google.generativeai as genai
-genai.configure(api_key=GEN_API_KEY)
-
-# ---- Initialize OpenAI ----
-from openai import OpenAI
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-# ---- Model names ----
-CAPTION_MODEL = "gemini-1.5-pro-vision"      # Check available model
-EDIT_MODEL    = "gemini-2.5-flash-image"         # Use your latest image-capable Gemini model
+# ---- Model names (override via .env if needed) ----
+CAPTION_MODEL = os.getenv("GENEDIT_CAPTION_MODEL", "gemini-2.5-flash")
+EDIT_MODEL = os.getenv("GENEDIT_EDIT_MODEL", "gemini-2.5-flash-image")
+EMBED_MODEL = os.getenv("GENEDIT_EMBED_MODEL", "text-embedding-3-small")
 
 # ---- Prompts ----
 CAPTION_PROMPT = """You are a helpful assistant that describes images.
 Provide a concise, natural-sounding caption (20-30 words) for the image.
-Make sure to capture key elements and context without being too generic.
+Capture the key subjects, setting and style without being too generic.
 """
 
 EDIT_PROMPT_TEMPLATE = """You are an image editing assistant.
-Given the user's instruction below, apply it and return the edited image.
+Apply the user's instruction to the provided image and return the edited image.
+Change only what the instruction asks for and keep everything else unchanged.
 
 Instruction: {user_prompt}
 """
 
-# ========== GEMINI FUNCTIONS ==========
 
-def generate_caption_gemini(image_path):
-    """Use Gemini Vision to generate an image caption."""
-    try:
-        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-        if not GEMINI_API_KEY:
-            raise ValueError("Missing GEMINI_API_KEY. Add it to your .env file.")
+class ImageEditError(RuntimeError):
+    """Raised when the model does not return an edited image."""
 
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash-image-preview")
-        img = Image.open(image_path)
 
-        response = model.generate_content([CAPTION_PROMPT, img])
-        return response.text.strip()
-    
-    except Exception as e:
-        print("Caption generation error:", e)
-        return "No caption available."
+# ---- Lazy clients: importing this module never fails because of a missing key ----
+_gemini_client = None
+_openai_client = None
 
-def edit_image_gemini(image_path, prompt_text, mask_path=None):
-    """Use Gemini to edit an image based on natural language instruction."""
-    try:
+
+def _gemini():
+    global _gemini_client
+    if _gemini_client is None:
         from google import genai
-        from google.genai import types
-        from PIL import Image
-        img = Image.open(image_path)
-        full_prompt = EDIT_PROMPT_TEMPLATE.format(user_prompt=prompt_text)
-        client = genai.Client(api_key=GEN_API_KEY)
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=[full_prompt, img],
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEN_API_KEY")
+        if not api_key:
+            raise RuntimeError("Missing GEMINI_API_KEY. Add it to your .env file.")
+        _gemini_client = genai.Client(api_key=api_key)
+    return _gemini_client
+
+
+def _openai():
+    global _openai_client
+    if _openai_client is None:
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("Missing OPENAI_API_KEY. Add it to your .env file.")
+        _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
+
+
+def to_png_bytes(image_bytes: bytes) -> bytes:
+    """Normalise any image bytes (JPEG, WebP, PNG...) to PNG so stored files match their .png names."""
+    with Image.open(BytesIO(image_bytes)) as img:
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA")
+        out = BytesIO()
+        img.save(out, format="PNG")
+        return out.getvalue()
+
+
+# ========== GEMINI ==========
+
+def generate_caption(image_path: str) -> str:
+    """Generate a short caption for an image with Gemini."""
+    with Image.open(image_path) as img:
+        img.load()
+        response = _gemini().models.generate_content(
+            model=CAPTION_MODEL, contents=[CAPTION_PROMPT, img]
+        )
+    text = (response.text or "").strip()
+    if not text:
+        raise RuntimeError("Caption model returned an empty response.")
+    return text
+
+
+def edit_image(image_path: str, prompt_text: str) -> bytes:
+    """Edit an image from a natural-language instruction. Returns PNG bytes.
+
+    Raises ImageEditError (instead of silently saving a broken file) when the
+    model returns no image, e.g. because it refused or replied with text only.
+    """
+    if not prompt_text or not prompt_text.strip():
+        raise ImageEditError("Edit instruction is empty.")
+
+    with Image.open(image_path) as img:
+        img.load()
+        response = _gemini().models.generate_content(
+            model=EDIT_MODEL,
+            contents=[EDIT_PROMPT_TEMPLATE.format(user_prompt=prompt_text.strip()), img],
         )
 
-        edited_bytes = None
+    model_text = []
+    for candidate in response.candidates or []:
+        parts = candidate.content.parts if candidate.content else None
+        for part in parts or []:
+            if part.inline_data and part.inline_data.data:
+                return to_png_bytes(part.inline_data.data)
+            if part.text:
+                model_text.append(part.text.strip())
 
-        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-            for part in response.candidates[0].content.parts:
-                if part.inline_data and part.inline_data.data:
-                    edited_bytes = part.inline_data.data
-                    return edited_bytes
-        
-        # fallback
-        return img.tobytes()
-    except Exception as e:
-        print("Image edit failed:", e)
-        with open(image_path, "rb") as f:
-            return f.read()
+    detail = f" Model said: {' '.join(model_text)}" if model_text else ""
+    raise ImageEditError("The model did not return an edited image." + detail)
 
-# ========== OPENAI EMBEDDING ==========
 
-def embed_text_openai(text):
-    """Use OpenAI embeddings for natural language search."""
-    try:
-        response = openai_client.embeddings.create(
-            model="text-embedding-3-small",
-            input=text
-        )
-        return response.data[0].embedding
-    except Exception as e:
-        print("Embedding error:", e)
-        return []
+# ========== OPENAI ==========
 
-# ========== UNIFIED PUBLIC FUNCTIONS ==========
-
-def generate_caption(image_path):
-    return generate_caption_gemini(image_path)
-
-def edit_image(image_path, prompt, mask_path=None):
-    return edit_image_gemini(image_path, prompt, mask_path)
-
-def embed_text(text):
-    return embed_text_openai(text)
+def embed_text(text: str) -> list[float]:
+    """Embed text with OpenAI for semantic search."""
+    response = _openai().embeddings.create(model=EMBED_MODEL, input=text)
+    return response.data[0].embedding

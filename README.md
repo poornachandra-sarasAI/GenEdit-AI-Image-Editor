@@ -1,175 +1,97 @@
-# GenEdit — AI Image Editor (MVP)
+# GenEdit — AI Image Editor
 
-An intelligent image editing platform that combines natural language processing with AI-powered image manipulation. GenEdit allows users to upload, organize, search, and edit images using simple natural language commands.
+Edit, organise and search images with plain-language instructions. GenEdit uses Gemini to edit and caption images, and OpenAI embeddings to make your library searchable by description.
 
-## 🚀 Features
+## Features
 
-### Core Functionality
-- **AI-Powered Image Editing**: Edit images using natural language instructions powered by Google's Gemini models
-- **Automatic Caption Generation**: AI-generated captions for better image organization and searchability  
-- **Semantic Search**: Find images using natural language queries with OpenAI embeddings
-- **Version Control**: Track all edits with complete version history and restore capability
-- **Image Library Management**: Organize and browse your image collection with an intuitive interface
+- **Natural-language editing** — "remove the background", "add a tree on the right", "make it more vibrant", or one-click presets
+- **Automatic captions** — every upload and edit is captioned by Gemini
+- **Semantic search** — find images by meaning ("beach photos", "person with dog") via cosine similarity over caption embeddings
+- **Version history** — every edit is a new version that stores its prompt; restore any earlier version in one click
+- **Search evaluation** — `eval_search.py` measures Recall@k and MRR on your own labelled queries
+- **Offline tests** — model calls are mocked, so the test suite runs without API keys
 
-### Key Capabilities
-- **Natural Language Editing**: Commands like "Remove background", "Add tree in background", "Make more vibrant"
-- **Smart Search**: Search using descriptions like "beach photos", "product images", "person with dog"
-- **Preset Actions**: Quick-access buttons for common editing tasks
-- **Version History**: View and restore any previous version of an edited image
-- **Metadata Management**: Automatic tagging and embedding generation for each image
-
-## 🛠️ Technology Stack
-
-- **Frontend**: Streamlit for web interface
-- **Image Processing**: PIL (Python Imaging Library)
-- **AI Models**: 
-  - Google Gemini 2.5 Flash for image editing and caption generation
-  - OpenAI text-embedding-3-small for semantic search
-- **Storage**: JSON-based metadata with file system storage
-- **Search**: Vector similarity search using numpy
-
-## 📋 Prerequisites
-
-- Python 3.8 or higher
-- Google AI Studio API key (for Gemini models)
-- OpenAI API key (for embeddings)
-
-## 🔧 Installation
-
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Set up environment variables**:
-   Create a `.env` file in the project root:
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   GEN_API_KEY=your_gemini_api_key_here
-   OPENAI_API_KEY=your_openai_api_key_here
-   ```
-
-4. **Run the application**:
-   ```bash
-   streamlit run streamlit_app.py
-   ```
-
-## 🖥️ Usage
-
-### Adding Images
-1. Navigate to the "Add Image" page
-2. Upload an image file (PNG, JPG, JPEG)
-3. Optionally add a title
-4. The system automatically generates captions and creates searchable embeddings
-
-### Searching Images
-1. Go to the "Library" page
-2. Use natural language in the search box (e.g., "sunset photos", "people smiling")
-3. Browse results or view all images in your library
-
-### Editing Images
-1. Open any image from the library
-2. Navigate to the Image Detail(by ID) page manually to see the selected image. (Important)
-3. Use preset buttons for common edits:
-   - Remove background
-   - Add tree in background  
-   - Make vibrant
-4. Or write custom editing instructions in natural language
-5. View version history and restore previous versions
-
-### Managing Versions
-- Each edit creates a new version while preserving the original
-- Access complete version history from the image detail page
-- Restore any previous version with one click
-- Each version includes the edit prompt for reference
-
-## 📁 Project Structure
+## How it works
 
 ```
-GenEdit-AI-Image-Editor/
-├── streamlit_app.py      # Main Streamlit application
-├── storage.py            # Data storage and retrieval functions
-├── ai_utils.py          # AI model integrations (Gemini, OpenAI)
-├── requirements.txt     # Python dependencies
-├── README.md           # This file
-├── .env                # Environment variables (create this)
-└── data/               # Storage directory
-    ├── metadata.json   # Image metadata and embeddings
-    └── [image-folders] # Individual image version folders
+upload ──► normalise to PNG ──► Gemini caption ──► OpenAI embedding ──► metadata.json
+edit   ──► Gemini 2.5 Flash Image ──► new PNG version ──► re-caption + re-embed
+search ──► embed query ──► cosine similarity vs. caption embeddings ──► ranked results
 ```
 
-## 🔑 API Keys Setup
+| Component | Choice |
+|---|---|
+| UI | Streamlit |
+| Image editing | `gemini-2.5-flash-image` (Google GenAI SDK) |
+| Captioning | `gemini-2.5-flash` |
+| Embeddings | OpenAI `text-embedding-3-small` |
+| Storage | PNG files per version + JSON metadata (atomic writes) |
 
-### Google AI Studio (Gemini)
-1. Visit [Google AI Studio](https://aistudio.google.com/)
-2. Create an API key
-3. Add it to your `.env` file as `GEMINI_API_KEY` and `GEN_API_KEY`
+Model names can be overridden with `GENEDIT_CAPTION_MODEL`, `GENEDIT_EDIT_MODEL` and `GENEDIT_EMBED_MODEL` in `.env`.
 
-### OpenAI
-1. Visit [OpenAI Platform](https://platform.openai.com/)
-2. Create an API key
-3. Add it to your `.env` file as `OPENAI_API_KEY`
+## Setup
 
-## 🎯 Use Cases
+Requires Python 3.10+.
 
-- **Content Creation**: Quick image edits for social media, blogs, marketing
-- **Photo Organization**: AI-powered tagging and search for large photo collections  
-- **Design Iteration**: Version control for design experiments
-- **Batch Processing**: Natural language commands for consistent edits across images
-- **Personal Photo Management**: Smart organization and search of personal photos
+```bash
+git clone https://github.com/poornachandra-sarasAI/GenEdit-AI-Image-Editor.git
+cd GenEdit-AI-Image-Editor
+pip install -r requirements.txt
+cp .env.example .env        # then add your keys
+streamlit run streamlit_app.py
+```
 
-## 🚧 Current Limitations
+Keys: a Gemini key from [Google AI Studio](https://aistudio.google.com/) (`GEMINI_API_KEY`) and an [OpenAI](https://platform.openai.com/) key (`OPENAI_API_KEY`).
 
-- Single-user application (no multi-user support)
-- Local storage only (no cloud integration)
-- Limited to supported image formats (PNG, JPG, JPEG)
-- Requires active internet connection for AI features
-- API rate limits apply based on your service plans
+## Usage
 
-## 🔮 Future Enhancements
+1. **Add Image** — upload a PNG/JPG with an optional title. It is captioned and indexed automatically.
+2. **Library** — browse everything, or search in natural language. Click **Open** on any image.
+3. **Image Detail** — apply a preset or write your own instruction, then **Apply edit**. Scroll down for the version history and **Restore**.
 
-- [ ] Multi-user support with authentication
-- [ ] Cloud storage integration (AWS S3, Google Cloud)
-- [ ] Batch editing capabilities
-- [ ] Advanced search filters and sorting
-- [ ] Export/import functionality
-- [ ] Mobile-responsive design
-- [ ] Integration with additional AI models
-- [ ] Real-time collaboration features
+If the model refuses or returns no image, the app shows the model's reply and does not save a broken version.
 
-## 🤝 Contributing
+## Evaluating search
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Label a few queries with the image titles (or IDs) that should come back:
 
-## 📝 License
+```json
+[
+  {"query": "dog playing on a beach", "relevant": ["beach-dog"]},
+  {"query": "a red sports car", "relevant": ["red-car"]}
+]
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+```bash
+python eval_search.py eval/queries.json --k 1 3 5
+```
 
-## 🆘 Support
+It prints Recall@1/3/5 and MRR, and lists the queries where the top result was wrong. See `eval/queries.example.json` for the format.
 
-If you encounter any issues or have questions:
+## Tests
 
-1. Check the console output for error messages
-2. Ensure all API keys are correctly set in the `.env` file
-3. Verify that all dependencies are installed
-4. Check that the `data/` directory has proper read/write permissions
+```bash
+pip install pytest
+python -m pytest -q
+```
 
-## 🙏 Acknowledgments
+Covers storage and versioning, search ranking, PNG normalisation, the no-image error path, the evaluation metrics, and app navigation (Streamlit `AppTest`).
 
-- Google Gemini for powerful image editing capabilities
-- OpenAI for semantic search embeddings
-- Streamlit for the intuitive web interface
-- The open-source community for the underlying libraries
+## Project structure
 
----
+```
+streamlit_app.py   # Streamlit UI and page routing
+ai_utils.py        # Gemini (edit, caption) and OpenAI (embeddings) calls
+storage.py         # Versioned file storage, metadata, vector search
+eval_search.py     # Recall@k / MRR evaluation for search
+eval/              # Example labelled queries
+tests/             # Offline test suite
+data/              # Your local image library (git-ignored)
+```
 
-**GenEdit MVP** - Making AI-powered image editing accessible through natural language interactions.
+## Limitations and next steps
+
+- Single-user, local storage; search is a linear scan, fine for hundreds of images but not millions
+- Search runs on captions, so it only finds what the caption mentions. Next: embed images directly (e.g. CLIP) and compare with this evaluation
+- Gemini returns opaque images, so "remove background" replaces it with white rather than transparency
+- Planned: batch edits, masked/regional edits, cloud storage
